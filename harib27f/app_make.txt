@@ -1,0 +1,127 @@
+# app_make.txt,haribote 应用程序 Makefile 公用 Makefile 部分,
+# 会被各应用程序包含到其 Makefile 中。
+
+# haribote app 工具路径,依赖头文件路径,库路径,操作系统路径,
+# 可根据实际目录更改
+TOOLPATH = ../../z_tools/
+INCPATH  = ../../z_tools/haribote/
+APILIBPATH   = ../apilib/
+HARIBOTEPATH = ../haribote/
+
+# make 是解析 Makefile 的工具;
+# nask.exe 是汇编编译器;
+# ccl.exe 是C程序编译器;
+# gas2nask.exe,obj2bim.exe,bin2obj.exe,bim2hrb.exe 是目标文件格式转换工具;
+# makefont.exe 是将 hankaku.txt 文件转换为字库文件的工具;
+# haribote.rul 相当于链接脚本;
+# eding.exe  是制作映像文件的工具;
+# imgtol.com 是将映像文件写入软盘的工具;
+# golib00.exe 库文件制作工具;
+# copy,del 是拷贝和删除命令。
+MAKE     = $(TOOLPATH)make.exe -r
+NASK     = $(TOOLPATH)nask.exe
+CC1      = $(TOOLPATH)cc1.exe -I$(INCPATH) -I../ -Os -Wall -quiet
+GAS2NASK = $(TOOLPATH)gas2nask.exe -a
+OBJ2BIM  = $(TOOLPATH)obj2bim.exe
+MAKEFONT = $(TOOLPATH)makefont.exe
+BIN2OBJ  = $(TOOLPATH)bin2obj.exe
+BIM2HRB  = $(TOOLPATH)bim2hrb.exe
+BIM2BIN  = $(TOOLPATH)bim2bin.exe
+RULEFILE = ../haribote.rul
+EDIMG    = $(TOOLPATH)edimg.exe
+IMGTOL   = $(TOOLPATH)imgtol.com
+GOLIB    = $(TOOLPATH)golib00.exe 
+COPY     = copy
+DEL      = del
+
+# make 默认解析规则,
+# 由于目标 default 不存在,所以该规则下的命令将会被无条件执行。
+# 即解析目标 $(APP).hrb 所在规则。变量 APP 在应用程序 Makefile
+# 中被定义,标识应用程序名。结合应用程序 harib27f/a 看下吧。
+default :
+    $(MAKE) $(APP).hrb
+
+# 该规则由目标 default 所在规则间接触发解析,
+# 若 $(APP).bim 不存在或其先决依赖文件有变时,该规则下的命令被执行,即生成
+# 目标文件 $(APP).bim, 从这里可以看出为应用程序栈设置了1Kb。
+$(APP).bim : $(APP).obj $(APILIBPATH)apilib.lib Makefile ../app_make.txt
+    $(OBJ2BIM) @$(RULEFILE) out:$(APP).bim map:$(APP).map stack:$(STACK) \
+        $(APP).obj $(APILIBPATH)apilib.lib
+
+# make haribote.img 或被 make run 触发解析,
+# 即将可执行应用程序 haribote 内核,$(APP).hrb 以及字库文件 nihong.fnt 加入映像文件中。
+haribote.img : ../haribote/ipl09.bin ../haribote/haribote.sys $(APP).hrb \
+        Makefile ../app_make.txt
+    $(EDIMG)   imgin:../../z_tools/fdimg0at.tek \
+        wbinimg src:../haribote/ipl09.bin len:512 from:0 to:0 \
+        copy from:../haribote/haribote.sys to:@: \
+        copy from:$(APP).hrb to:@: \
+        copy from:../nihongo/nihongo.fnt to:@: \
+        imgout:haribote.img
+
+# 以下是5条隐式规则,根据应用程序 Makefile,第5条隐式规则
+# 将会被 default 目标所在规则匹配并被解析,随之匹配第4条
+# 隐式规则,然后触发目标 $(APP).bim 所在规则被解析, 该规
+# 则的 .obj 先决依赖文件将会匹配第3条隐式规则,第3条隐式
+# 规则将会匹配第2条隐式规则, 第2条隐式规则将会匹配第1条
+# 隐式规则。即由完成由源文件 $(APP).C 生成可执行文件 $(APP).hrb。
+%.gas : %.c ../apilib.h Makefile ../app_make.txt
+    $(CC1) -o $*.gas $*.c
+
+%.nas : %.gas Makefile ../app_make.txt
+    $(GAS2NASK) $*.gas $*.nas
+
+%.obj : %.nas Makefile ../app_make.txt
+    $(NASK) $*.nas $*.obj $*.lst
+
+%.org : %.bim Makefile ../app_make.txt
+    $(BIM2HRB) $*.bim $*.org $(MALLOC)
+
+%.hrb : %.org Makefile ../app_make.txt
+    $(BIM2BIN) -osacmp in:$*.org out:$*.hrb
+
+# make run 
+# 由于目标 run 不存在,所以该规则下的命令将会被无条件执行,
+# [1] 即制作额外包含可执行应用程序 $(APP).hrb,字库的映像文件;
+# [2] 将映像文件拷贝到虚拟机 qemu.exe 同目录的 fdimage0.bin 中;
+# [3] 启动虚拟机 qemu.exe 加载 fdimage0.bin 运行。
+run :
+    $(MAKE) haribote.img
+    $(COPY) haribote.img ..\..\z_tools\qemu\fdimage0.bin
+    $(MAKE) -C ../../z_tools/qemu
+
+# make full 
+# 由于目标 full 不存在,所以该规则下的命令将会被无条件执行,
+# [1] 到库文件所在目录执行 make 生成系统调用库文件;
+# [2] 生成可执行应用程序 $(APP).hrb
+full :
+    $(MAKE) -C $(APILIBPATH)
+    $(MAKE) $(APP).hrb
+
+# make run_full 
+# 由于目标 run_full 不存在,所以该规则下的命令将会被无条件执行,
+# [1] 到库文件所在目录执行 make 生成系统调用库文件;
+# [2] 到操作系统目录下执行 make 命令生成操作系统内核文件;
+# [3] 在虚拟机 qemu.exe 中运行操作系统。
+run_full :
+    $(MAKE) -C $(APILIBPATH)
+    $(MAKE) -C ../haribote
+    $(MAKE) run
+
+# make clean 
+# 由于目标 clean 不存在,所以该规则下的命令将会被无条件执行,
+# 即删除由 make 解析本 Makefile 时生成的中间文件。
+clean :
+    -$(DEL) *.lst
+    -$(DEL) *.obj
+    -$(DEL) *.map
+    -$(DEL) *.bim
+    -$(DEL) *.org
+    -$(DEL) haribote.img
+
+# make src_only 
+# 由于目标 src_only 不存在,所以该规则下的命令将会被无条件执行,
+# 即删除由 make 解析本 Makefile 时生成所有文件,只保留源文件。
+src_only :
+    $(MAKE) clean
+    -$(DEL) $(APP).hrb
