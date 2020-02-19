@@ -2,7 +2,7 @@
 ---
 `haribote_meeting` just only means haribote OS learning, reading and annotating.
 
-I had tried my best to read and annotate haribote OS during 2019.06 ~ 2019.11, the small fragment following extracted from haribote_meeting/harib27f/haribote/graphic.c.
+I had tried my best to read and annotate haribote OS during 2019.06 ~ 2019.11, the small fragment following extracted from harib27f/haribote/graphic.c.
 ```C
 /* boxfill8,
  * 用色号c充当窗口[(x0,y0),(x1,y1)]区域画面信息,窗口x方向像素点数为xsize。
